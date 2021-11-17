@@ -1,0 +1,532 @@
+classdef wavGenFinal_exported < matlab.apps.AppBase
+
+    % Properties that correspond to app components
+    properties (Access = public)
+        UIFigure                   matlab.ui.Figure
+        GridLayout                 matlab.ui.container.GridLayout
+        LeftPanel                  matlab.ui.container.Panel
+        LagLead                    matlab.ui.control.DropDown
+        VoltdivEditField           matlab.ui.control.NumericEditField
+        TimedivEditField           matlab.ui.control.NumericEditField
+        TimeDivKnob                matlab.ui.control.Knob
+        TimeDivKnobLabel           matlab.ui.control.Label
+        VoltDivKnob                matlab.ui.control.Knob
+        VoltDivKnobLabel           matlab.ui.control.Label
+        VoltDivDropDown            matlab.ui.control.DropDown
+        TimeDivDropDown            matlab.ui.control.DropDown
+        FreDropDown                matlab.ui.control.DropDown
+        OffsetVEditField           matlab.ui.control.NumericEditField
+        OffsetVEditFieldLabel      matlab.ui.control.Label
+        PhaseDegreeEditField       matlab.ui.control.NumericEditField
+        PhaseDegreeEditFieldLabel  matlab.ui.control.Label
+        FrequencyEditField         matlab.ui.control.NumericEditField
+        FrequencyEditFieldLabel    matlab.ui.control.Label
+        AmplitudeVEditField        matlab.ui.control.NumericEditField
+        AmplitudeVEditFieldLabel   matlab.ui.control.Label
+        WaveformDropDown           matlab.ui.control.DropDown
+        WaveformDropDownLabel      matlab.ui.control.Label
+        RightPanel                 matlab.ui.container.Panel
+        Lamp                       matlab.ui.control.Lamp
+        Switch                     matlab.ui.control.Switch
+        UIAxes                     matlab.ui.control.UIAxes
+    end
+
+    % Properties that correspond to apps with auto-reflow
+    properties (Access = private)
+        onePanelWidth = 576;
+    end
+
+    
+    methods (Access = public)
+        
+        function [unitvalue] = timeUnit(app)
+            unit = app.TimeDivDropDown.Value;
+            if(strcmp(unit,'s'))
+                unitvalue = 1;
+            elseif(strcmp(unit,'x1ms'))
+                unitvalue = 1/10^3;
+            elseif(strcmp(unit,'x10ms'))
+                unitvalue = 10/10^3;
+            elseif(strcmp(unit,'x100ms'))
+                unitvalue = 100/10^3;
+            elseif(strcmp(unit,'x10us'))
+                unitvalue = 10/10^6;
+            elseif(strcmp(unit,'x100us'))
+                unitvalue = 100/10^6;
+            end
+        end
+        function xlabelname(app)
+            unit = app.TimeDivDropDown.Value;
+            app.UIAxes.XLabel.String = "Time("+unit+")";
+        end
+        
+        function [VDvalue] = VDUnit(app)
+            unit = app.VoltDivDropDown.Value;
+            if(strcmp(unit,'x1V'))
+                VDvalue = 1;
+            elseif(strcmp(unit,'x10mV'))
+                VDvalue = 10/1000;
+            elseif(strcmp(unit,'x100mV'))
+                VDvalue = 100/1000;
+            end
+        end
+
+        function [frevalue] = FreUnit(app)
+            unit = app.FreDropDown.Value;
+            if(strcmp(unit,'x1Hz'))
+                frevalue = 1;
+            elseif(strcmp(unit,'x10Hz'))
+                frevalue = 10;
+            elseif(strcmp(unit,'x100Hz'))
+                frevalue = 100;
+            elseif(strcmp(unit,'x1kHz'))
+                frevalue = 100;
+            elseif(strcmp(unit,'x10kHz'))
+                frevalue = 10000;
+            end
+        end
+        
+        function setDefult(app)
+            cla(app.UIAxes);
+            app.AmplitudeVEditField.Value = 1;
+            app.FrequencyEditField.Value = 1;
+            app.PhaseDegreeEditField.Value = 0;
+            app.OffsetVEditField.Value = 0;
+            app.TimeDivDropDown.Value = 's';
+            app.VoltDivDropDown.Value = 'x1V';
+            app.FreDropDown.Value = 'x1Hz';
+            app.TimeDivKnob.Value = 1;
+            app.VoltDivKnob.Value = 1;
+            app.VoltdivEditField.Value=1;
+            app.TimedivEditField.Value=1;
+            app.LagLead.Value='Lagging';
+
+            app.UIAxes.YLim = [-1 1];
+            app.UIAxes.XLim = [-1 1];
+            app.UIAxes.XAxisLocation = 'origin';
+            app.UIAxes.YAxisLocation = 'origin';
+            xlabelname(app);
+        end
+    end
+    
+
+    % Callbacks that handle component events
+    methods (Access = private)
+
+        % Code that executes after component creation
+        function startupFcn(app)
+            app.UIAxes.YLim = [-1 1];
+            app.UIAxes.XLim = [-1 1];
+            app.UIAxes.XAxisLocation = 'origin';
+            app.UIAxes.YAxisLocation = 'origin';
+        end
+
+        % Value changed function: Switch
+        function SwitchValueChanged(app, event)
+            app.UIAxes.XAxisLocation = 'origin';
+            app.UIAxes.YAxisLocation = 'origin';
+            value = app.Switch.Value;
+            amp = app.AmplitudeVEditField.Value ;
+            F = app.FrequencyEditField.Value;
+            FU = FreUnit(app);
+            F = F*FU;
+            Td = app.TimeDivKnob.Value;
+            t = -1*Td:1/(100*FU): Td;
+            TU = timeUnit(app);
+            t = t*TU;
+            Tperiod = 1/F;
+            Omega = (2*pi)/Tperiod; % w
+            PhaseAngle = app.PhaseDegreeEditField.Value; 
+            PhaseAngle = (PhaseAngle*Omega)/360;
+            LL = app.LagLead.Value;
+            if strcmp(LL,'Lagging')
+                PhaseAngle = PhaseAngle*(-1);
+            end
+            offset = app.OffsetVEditField.Value;
+            Wtype = app.WaveformDropDown.Value;
+            VoltDiv = app.VoltDivKnob.Value;
+            TimeDive = app.TimeDivKnob.Value;
+            
+            if strcmp(value,'Off')
+                app.Lamp.Color = 'r';
+                setDefult(app);
+            else
+                xlabelname(app);
+                app.Lamp.Color = 'g';
+                cla(app.UIAxes);
+                VU = VDUnit(app);
+                VoltDiv = VoltDiv*VU;
+
+                TimeDiv = TimeDive*TU;
+                app.UIAxes.YLim = [(-1)*VoltDiv VoltDiv];
+                app.UIAxes.XLim = [(-1)*TimeDiv TimeDiv];
+                
+                if strcmp(Wtype,'Sine')
+                    y = amp*(sin(Omega*t+PhaseAngle));
+                    plot(app.UIAxes,t,y+offset,'LineWidth',2.0);
+                elseif strcmp(Wtype,'Square')
+                    sq = 0;
+                    for k=1:2:10000
+                        sq = sq + (4*amp*sin(k*Omega*t+PhaseAngle*k))/(pi*k);
+                    end
+                    plot(app.UIAxes,t,sq+offset,'LineWidth',2.0);
+
+                elseif strcmp(Wtype,'Triangular')
+                    tri = amp/2;
+                    for k = 1:2:10000
+                        tri = tri + ((-4*amp)*cos(k*Omega*t+PhaseAngle*k))/(k*pi)^2;
+                    end
+                    plot(app.UIAxes,t,tri+offset,'LineWidth',2.0);
+
+                elseif strcmp(Wtype,'Sawtooth')
+                    sa = amp/2;%0;
+                    for k=1:1:10000
+                        sa = sa + (amp*-1*sin(k*Omega*t+PhaseAngle*k))/(pi*k);
+                    end
+                    plot(app.UIAxes,t,sa+offset,'LineWidth',2.0);
+                    
+                elseif strcmp(Wtype,'Full-wave rectified')
+                    full = (2*amp)/pi;
+                    for k=1:1:10000
+                        full = full +((-4*amp)*cos(k*Omega*t+PhaseAngle*k))/(pi*((4*k*k)-1));
+                    end
+                    plot(app.UIAxes,t,full+offset,'LineWidth',2.0);
+                end
+            end
+        end
+
+        % Button down function: UIAxes
+        function UIAxesButtonDown(app, event)
+            SwitchValueChanged(app, event);
+        end
+
+        % Callback function
+        function PlotButtonPushed(app, event)
+            
+        end
+
+        % Value changed function: TimeDivKnob
+        function TimeDivKnobValueChanged(app, event)
+           app.TimedivEditField.Value = app.TimeDivKnob.Value;
+           SwitchValueChanged(app, event);
+        end
+
+        % Button down function: LeftPanel
+        function LeftPanelButtonDown(app, event)
+            
+        end
+
+        % Value changed function: PhaseDegreeEditField
+        function PhaseDegreeEditFieldValueChanged(app, event)
+            SwitchValueChanged(app, event);
+        end
+
+        % Value changed function: WaveformDropDown
+        function WaveformDropDownValueChanged(app, event)
+            SwitchValueChanged(app, event);
+        end
+
+        % Value changed function: OffsetVEditField
+        function OffsetVEditFieldValueChanged(app, event)
+            SwitchValueChanged(app, event);
+        end
+
+        % Value changed function: AmplitudeVEditField
+        function AmplitudeVEditFieldValueChanged(app, event)
+            SwitchValueChanged(app, event);
+        end
+
+        % Value changed function: FrequencyEditField
+        function FrequencyEditFieldValueChanged(app, event)
+            SwitchValueChanged(app, event);
+        end
+
+        % Value changed function: TimeDivDropDown
+        function TimeDivDropDownValueChanged(app, event)
+            SwitchValueChanged(app, event);
+        end
+
+        % Value changed function: FreDropDown
+        function FreDropDownValueChanged(app, event)
+            SwitchValueChanged(app, event);
+        end
+
+        % Button down function: RightPanel
+        function RightPanelButtonDown(app, event)
+            
+        end
+
+        % Value changed function: VoltDivKnob
+        function VoltDivKnobValueChanged(app, event)
+            app.VoltdivEditField.Value = app.VoltDivKnob.Value;
+            SwitchValueChanged(app, event);
+        end
+
+        % Value changed function: VoltDivDropDown
+        function VoltDivDropDownValueChanged(app, event)
+            SwitchValueChanged(app, event);
+        end
+
+        % Value changed function: TimedivEditField
+        function TimedivEditFieldValueChanged(app, event)
+            app.TimeDivKnob.Value = app.TimedivEditField.Value;
+            SwitchValueChanged(app, event);
+        end
+
+        % Value changed function: VoltdivEditField
+        function VoltdivEditFieldValueChanged(app, event)
+            app.VoltDivKnob.Value = app.VoltdivEditField.Value;
+            SwitchValueChanged(app, event);
+        end
+
+        % Value changed function: LagLead
+        function LagLeadValueChanged(app, event)
+           SwitchValueChanged(app, event);
+        end
+
+        % Changes arrangement of the app based on UIFigure width
+        function updateAppLayout(app, event)
+            currentFigureWidth = app.UIFigure.Position(3);
+            if(currentFigureWidth <= app.onePanelWidth)
+                % Change to a 2x1 grid
+                app.GridLayout.RowHeight = {564, 564};
+                app.GridLayout.ColumnWidth = {'1x'};
+                app.RightPanel.Layout.Row = 2;
+                app.RightPanel.Layout.Column = 1;
+            else
+                % Change to a 1x2 grid
+                app.GridLayout.RowHeight = {'1x'};
+                app.GridLayout.ColumnWidth = {281, '1x'};
+                app.RightPanel.Layout.Row = 1;
+                app.RightPanel.Layout.Column = 2;
+            end
+        end
+    end
+
+    % Component initialization
+    methods (Access = private)
+
+        % Create UIFigure and components
+        function createComponents(app)
+
+            % Create UIFigure and hide until all components are created
+            app.UIFigure = uifigure('Visible', 'off');
+            app.UIFigure.AutoResizeChildren = 'off';
+            app.UIFigure.Color = [0 0 0];
+            app.UIFigure.Position = [100 100 943 564];
+            app.UIFigure.Name = 'MATLAB App';
+            app.UIFigure.SizeChangedFcn = createCallbackFcn(app, @updateAppLayout, true);
+
+            % Create GridLayout
+            app.GridLayout = uigridlayout(app.UIFigure);
+            app.GridLayout.ColumnWidth = {281, '1x'};
+            app.GridLayout.RowHeight = {'1x'};
+            app.GridLayout.ColumnSpacing = 0;
+            app.GridLayout.RowSpacing = 0;
+            app.GridLayout.Padding = [0 0 0 0];
+            app.GridLayout.Scrollable = 'on';
+
+            % Create LeftPanel
+            app.LeftPanel = uipanel(app.GridLayout);
+            app.LeftPanel.ButtonDownFcn = createCallbackFcn(app, @LeftPanelButtonDown, true);
+            app.LeftPanel.Layout.Row = 1;
+            app.LeftPanel.Layout.Column = 1;
+
+            % Create WaveformDropDownLabel
+            app.WaveformDropDownLabel = uilabel(app.LeftPanel);
+            app.WaveformDropDownLabel.FontWeight = 'bold';
+            app.WaveformDropDownLabel.Position = [27 496 78 22];
+            app.WaveformDropDownLabel.Text = 'Waveform';
+
+            % Create WaveformDropDown
+            app.WaveformDropDown = uidropdown(app.LeftPanel);
+            app.WaveformDropDown.Items = {'Sine', 'Square', 'Triangular', 'Sawtooth', 'Full-wave rectified'};
+            app.WaveformDropDown.ValueChangedFcn = createCallbackFcn(app, @WaveformDropDownValueChanged, true);
+            app.WaveformDropDown.FontWeight = 'bold';
+            app.WaveformDropDown.Position = [121 496 131 22];
+            app.WaveformDropDown.Value = 'Sine';
+
+            % Create AmplitudeVEditFieldLabel
+            app.AmplitudeVEditFieldLabel = uilabel(app.LeftPanel);
+            app.AmplitudeVEditFieldLabel.FontWeight = 'bold';
+            app.AmplitudeVEditFieldLabel.Position = [27 383 93 22];
+            app.AmplitudeVEditFieldLabel.Text = 'Amplitude (V)';
+
+            % Create AmplitudeVEditField
+            app.AmplitudeVEditField = uieditfield(app.LeftPanel, 'numeric');
+            app.AmplitudeVEditField.Limits = [0 Inf];
+            app.AmplitudeVEditField.ValueChangedFcn = createCallbackFcn(app, @AmplitudeVEditFieldValueChanged, true);
+            app.AmplitudeVEditField.Position = [121 383 131 22];
+            app.AmplitudeVEditField.Value = 1;
+
+            % Create FrequencyEditFieldLabel
+            app.FrequencyEditFieldLabel = uilabel(app.LeftPanel);
+            app.FrequencyEditFieldLabel.FontWeight = 'bold';
+            app.FrequencyEditFieldLabel.Position = [27 341 78 22];
+            app.FrequencyEditFieldLabel.Text = 'Frequency';
+
+            % Create FrequencyEditField
+            app.FrequencyEditField = uieditfield(app.LeftPanel, 'numeric');
+            app.FrequencyEditField.Limits = [0 Inf];
+            app.FrequencyEditField.ValueChangedFcn = createCallbackFcn(app, @FrequencyEditFieldValueChanged, true);
+            app.FrequencyEditField.Position = [119 341 46 22];
+            app.FrequencyEditField.Value = 1;
+
+            % Create PhaseDegreeEditFieldLabel
+            app.PhaseDegreeEditFieldLabel = uilabel(app.LeftPanel);
+            app.PhaseDegreeEditFieldLabel.Position = [27 465 90 22];
+            app.PhaseDegreeEditFieldLabel.Text = 'Phase (Degree)';
+
+            % Create PhaseDegreeEditField
+            app.PhaseDegreeEditField = uieditfield(app.LeftPanel, 'numeric');
+            app.PhaseDegreeEditField.Limits = [0 Inf];
+            app.PhaseDegreeEditField.ValueChangedFcn = createCallbackFcn(app, @PhaseDegreeEditFieldValueChanged, true);
+            app.PhaseDegreeEditField.Position = [209 465 43 22];
+
+            % Create OffsetVEditFieldLabel
+            app.OffsetVEditFieldLabel = uilabel(app.LeftPanel);
+            app.OffsetVEditFieldLabel.FontWeight = 'bold';
+            app.OffsetVEditFieldLabel.Position = [27 422 78 22];
+            app.OffsetVEditFieldLabel.Text = 'Offset (V)';
+
+            % Create OffsetVEditField
+            app.OffsetVEditField = uieditfield(app.LeftPanel, 'numeric');
+            app.OffsetVEditField.ValueChangedFcn = createCallbackFcn(app, @OffsetVEditFieldValueChanged, true);
+            app.OffsetVEditField.Position = [121 422 131 22];
+
+            % Create FreDropDown
+            app.FreDropDown = uidropdown(app.LeftPanel);
+            app.FreDropDown.Items = {'x1Hz', 'x10Hz', 'x100Hz', 'x1kHz', 'x10kHz'};
+            app.FreDropDown.ValueChangedFcn = createCallbackFcn(app, @FreDropDownValueChanged, true);
+            app.FreDropDown.Position = [171 341 81 22];
+            app.FreDropDown.Value = 'x1Hz';
+
+            % Create TimeDivDropDown
+            app.TimeDivDropDown = uidropdown(app.LeftPanel);
+            app.TimeDivDropDown.Items = {'s', 'x1ms', 'x10ms', 'x100ms', 'x10us', 'x100us'};
+            app.TimeDivDropDown.ValueChangedFcn = createCallbackFcn(app, @TimeDivDropDownValueChanged, true);
+            app.TimeDivDropDown.Position = [181 174 63 22];
+            app.TimeDivDropDown.Value = 's';
+
+            % Create VoltDivDropDown
+            app.VoltDivDropDown = uidropdown(app.LeftPanel);
+            app.VoltDivDropDown.Items = {'x1V', 'x10mV', 'x100mV'};
+            app.VoltDivDropDown.ValueChangedFcn = createCallbackFcn(app, @VoltDivDropDownValueChanged, true);
+            app.VoltDivDropDown.Position = [175 27 69 22];
+            app.VoltDivDropDown.Value = 'x1V';
+
+            % Create VoltDivKnobLabel
+            app.VoltDivKnobLabel = uilabel(app.LeftPanel);
+            app.VoltDivKnobLabel.HorizontalAlignment = 'right';
+            app.VoltDivKnobLabel.Position = [70 26 99 22];
+            app.VoltDivKnobLabel.Text = 'Volt /  Div';
+
+            % Create VoltDivKnob
+            app.VoltDivKnob = uiknob(app.LeftPanel, 'continuous');
+            app.VoltDivKnob.Limits = [1 10];
+            app.VoltDivKnob.MajorTicks = [1 2 3 4 5 6 7 8 9 10];
+            app.VoltDivKnob.ValueChangedFcn = createCallbackFcn(app, @VoltDivKnobValueChanged, true);
+            app.VoltDivKnob.Position = [111 82 60 60];
+            app.VoltDivKnob.Value = 1;
+
+            % Create TimeDivKnobLabel
+            app.TimeDivKnobLabel = uilabel(app.LeftPanel);
+            app.TimeDivKnobLabel.HorizontalAlignment = 'right';
+            app.TimeDivKnobLabel.Position = [76 174 99 22];
+            app.TimeDivKnobLabel.Text = 'Time /  Div';
+
+            % Create TimeDivKnob
+            app.TimeDivKnob = uiknob(app.LeftPanel, 'continuous');
+            app.TimeDivKnob.Limits = [1 10];
+            app.TimeDivKnob.ValueChangedFcn = createCallbackFcn(app, @TimeDivKnobValueChanged, true);
+            app.TimeDivKnob.Position = [111 230 60 60];
+            app.TimeDivKnob.Value = 1;
+
+            % Create TimedivEditField
+            app.TimedivEditField = uieditfield(app.LeftPanel, 'numeric');
+            app.TimedivEditField.Limits = [1 10];
+            app.TimedivEditField.ValueChangedFcn = createCallbackFcn(app, @TimedivEditFieldValueChanged, true);
+            app.TimedivEditField.Position = [44 174 65 22];
+            app.TimedivEditField.Value = 1;
+
+            % Create VoltdivEditField
+            app.VoltdivEditField = uieditfield(app.LeftPanel, 'numeric');
+            app.VoltdivEditField.ValueChangedFcn = createCallbackFcn(app, @VoltdivEditFieldValueChanged, true);
+            app.VoltdivEditField.Position = [44 27 65 22];
+            app.VoltdivEditField.Value = 1;
+
+            % Create LagLead
+            app.LagLead = uidropdown(app.LeftPanel);
+            app.LagLead.Items = {'Lagging', 'Leading'};
+            app.LagLead.ValueChangedFcn = createCallbackFcn(app, @LagLeadValueChanged, true);
+            app.LagLead.Position = [121 465 80 22];
+            app.LagLead.Value = 'Lagging';
+
+            % Create RightPanel
+            app.RightPanel = uipanel(app.GridLayout);
+            app.RightPanel.TitlePosition = 'centertop';
+            app.RightPanel.ButtonDownFcn = createCallbackFcn(app, @RightPanelButtonDown, true);
+            app.RightPanel.Layout.Row = 1;
+            app.RightPanel.Layout.Column = 2;
+
+            % Create UIAxes
+            app.UIAxes = uiaxes(app.RightPanel);
+            title(app.UIAxes, 'Wave')
+            xlabel(app.UIAxes, 'Time(s)')
+            ylabel(app.UIAxes, 'Volt')
+            zlabel(app.UIAxes, 'Z')
+            app.UIAxes.AmbientLightColor = [0 0 0];
+            app.UIAxes.XLimitMethod = 'tight';
+            app.UIAxes.YLimitMethod = 'tight';
+            app.UIAxes.MinorGridLineStyle = '--';
+            app.UIAxes.XAxisLocation = 'origin';
+            app.UIAxes.YAxisLocation = 'origin';
+            app.UIAxes.XGrid = 'on';
+            app.UIAxes.YGrid = 'on';
+            app.UIAxes.GridAlpha = 0.2;
+            app.UIAxes.ButtonDownFcn = createCallbackFcn(app, @UIAxesButtonDown, true);
+            app.UIAxes.Position = [7 40 650 500];
+
+            % Create Switch
+            app.Switch = uiswitch(app.RightPanel, 'slider');
+            app.Switch.ValueChangedFcn = createCallbackFcn(app, @SwitchValueChanged, true);
+            app.Switch.Position = [46 24 45 20];
+
+            % Create Lamp
+            app.Lamp = uilamp(app.RightPanel);
+            app.Lamp.Position = [142 24 20 20];
+            app.Lamp.Color = [1 0 0];
+
+            % Show the figure after all components are created
+            app.UIFigure.Visible = 'on';
+        end
+    end
+
+    % App creation and deletion
+    methods (Access = public)
+
+        % Construct app
+        function app = wavGenFinal_exported
+
+            % Create UIFigure and components
+            createComponents(app)
+
+            % Register the app with App Designer
+            registerApp(app, app.UIFigure)
+
+            % Execute the startup function
+            runStartupFcn(app, @startupFcn)
+
+            if nargout == 0
+                clear app
+            end
+        end
+
+        % Code that executes before app deletion
+        function delete(app)
+
+            % Delete UIFigure when app is deleted
+            delete(app.UIFigure)
+        end
+    end
+end
